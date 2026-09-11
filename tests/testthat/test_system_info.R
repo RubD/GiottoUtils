@@ -44,11 +44,26 @@ test_that(".awake_cmd picks the right mechanism per platform", {
     expect_null(.awake_cmd("windows"))
     expect_null(.awake_cmd("some-future-os"))
 
-    lin <- .awake_cmd("linux")
+    lin <- .awake_cmd("linux", pid = 4242)
     if (nzchar(Sys.which("systemd-inhibit"))) {
         expect_equal(lin$cmd, "systemd-inhibit")
+        # systemd-inhibit holds its lock for as long as the command it runs, so
+        # that command must be the thing bound to our pid -- otherwise the lock
+        # survives a crashed session and no session can tell its helper apart
+        # from another's
+        expect_true("--pid" %in% lin$args)
+        expect_true("4242" %in% lin$args)
+        expect_false("infinity" %in% lin$args)
     } else {
         expect_null(lin)
+    }
+
+    # the pid is what makes a helper identifiable as ours, on either platform
+    for (os in c("osx", "linux")) {
+        cmd <- .awake_cmd(os, pid = 4242)
+        if (!is.null(cmd)) {
+            expect_true("4242" %in% cmd$args, info = os)
+        }
     }
 })
 
