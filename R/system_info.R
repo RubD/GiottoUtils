@@ -71,10 +71,8 @@ get_os <- function() {
 # has no mechanism we can use. Kept separate from execution so the choice is
 # testable without spawning anything.
 #
-# Every branch binds the helper to `pid`, which buys two things. The assertion
-# is self-cleaning -- it cannot outlive the session even if teardown never runs
-# -- and the pid in the command line makes the helper identifiable as ours, so
-# concurrent sessions on one host do not release each other's holds.
+# Every branch binds the helper to `pid` so the assertion is self-cleaning: it
+# cannot outlive the session even if teardown never runs.
 #
 # macOS has a flag for it: `caffeinate -w <pid>` exits when that pid exits.
 # systemd-inhibit instead holds its lock for as long as the command it is given
@@ -105,18 +103,44 @@ get_os <- function() {
     )
 }
 
-# pid of a helper we started, or NA. Matched on the full command line, which is
-# unambiguous because it embeds our own pid.
-.awake_pid <- function(cmd = .awake_cmd()) {
-    if (is.null(cmd)) return(NA_integer_)
-    pat <- paste(c(cmd$cmd, cmd$args), collapse = " ")
+# The helper this session started, if any.
+#
+# This used to be rediscovered by matching the command line with `pgrep -f`,
+# which false-positived on Linux: `.awake_pid()` reported a hold when there was
+# none, so `keep_awake(TRUE)` took the "already holding" branch and never
+# started anything. Sleep prevention silently did nothing while reporting
+# success. Remembering the pid we were handed removes the guesswork -- there is
+# no pattern left to mismatch.
+.awake_state <- new.env(parent = emptyenv())
+.awake_state$pid <- NA_integer_
+
+# `system2(wait = FALSE)` does not report the pid it started, so background the
+# helper through the shell and have it tell us. stdin and both output streams
+# are detached, otherwise the helper holds the pipe open and `intern = TRUE`
+# blocks waiting for an EOF that only arrives when the helper exits.
+.awake_spawn <- function(cmd) {
+    line <- paste(shQuote(c(cmd$cmd, cmd$args)), collapse = " ")
     out <- suppressWarnings(tryCatch(
-        system2("pgrep", c("-f", shQuote(pat)), stdout = TRUE, stderr = FALSE),
+        system(paste(line, "</dev/null >/dev/null 2>&1 & echo $!"),
+            intern = TRUE
+        ),
         error = function(e) character(0)
     ))
     out <- suppressWarnings(as.integer(out))
     out <- out[!is.na(out)]
     if (!length(out)) NA_integer_ else out[[1L]]
+}
+
+.awake_alive <- function(pid) {
+    !is.na(pid) && isTRUE(tools::pskill(pid, 0L)) # signal 0 only tests
+}
+
+# pid of the helper this session started and that is still running, else NA.
+# Reaps the record if the helper has since died, so a stale pid is never
+# reported as a live hold.
+.awake_pid <- function() {
+    if (!.awake_alive(.awake_state$pid)) .awake_state$pid <- NA_integer_
+    .awake_state$pid
 }
 
 #' @title keep_awake
@@ -142,7 +166,9 @@ get_os <- function() {
 #' bound to this process and exits with it. For the same reason, sessions running
 #' side by side on one machine hold and release independently.
 #'
-#' Idempotent — calling it repeatedly with `on = TRUE` leaves a single helper.
+#' Idempotent within a session — calling it repeatedly with `on = TRUE` leaves a
+#' single helper. A session only ever tracks and releases the helper it started
+#' itself, so it cannot report another session's hold as its own.
 #' @section Options:
 #' \describe{
 #'   \item{`giotto.prevent_sleep`}{when `FALSE`, `keep_awake(TRUE)` and
@@ -183,19 +209,24 @@ keep_awake <- function(on = TRUE) {
         return(invisible(FALSE))
     }
 
-    held <- .awake_pid(cmd)
+    held <- .awake_pid()
 
     if (isTRUE(on)) {
         if (!is.na(held)) return(invisible(TRUE)) # already holding
-        system2(cmd$cmd, cmd$args, wait = FALSE, stdout = FALSE, stderr = FALSE)
-        Sys.sleep(0.2) # let it register before we look for it
-        ok <- !is.na(.awake_pid(cmd))
+        .awake_state$pid <- .awake_spawn(cmd)
+        # a helper that cannot do its job exits at once rather than failing to
+        # start, so give it a moment before asking whether it is still alive
+        Sys.sleep(0.2)
+        ok <- !is.na(.awake_pid())
         if (!ok) {
             warning("keep_awake: could not start ", cmd$cmd, call. = FALSE)
         }
         return(invisible(ok))
     }
 
-    if (!is.na(held)) tools::pskill(held)
+    if (!is.na(held)) {
+        tools::pskill(held)
+        .awake_state$pid <- NA_integer_
+    }
     invisible(FALSE)
 }

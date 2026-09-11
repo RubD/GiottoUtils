@@ -33,7 +33,9 @@ No sleep assertion can outlive the R session: on both platforms the helper is
 bound to this process and exits with it. For the same reason, sessions running
 side by side on one machine hold and release independently.
 
-Idempotent — calling it repeatedly with \code{on = TRUE} leaves a single helper.
+Idempotent within a session — calling it repeatedly with \code{on = TRUE} leaves a
+single helper. A session only ever tracks and releases the helper it started
+itself, so it cannot report another session's hold as its own.
 }
 \section{Options}{
 
