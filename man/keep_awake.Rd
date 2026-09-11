@@ -29,8 +29,9 @@ with CPU-seconds, memory and I/O counters all looking entirely normal.
 \details{
 Uses \code{caffeinate} on macOS and \code{systemd-inhibit} on Linux; on other platforms,
 or when neither is available, it reports that it cannot help and does nothing.
-No sleep assertion can outlive the R session: on macOS the helper is bound to
-this process and exits with it.
+No sleep assertion can outlive the R session: on both platforms the helper is
+bound to this process and exits with it. For the same reason, sessions running
+side by side on one machine hold and release independently.
 
 Idempotent — calling it repeatedly with \code{on = TRUE} leaves a single helper.
 }

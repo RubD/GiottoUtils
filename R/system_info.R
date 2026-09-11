@@ -71,9 +71,15 @@ get_os <- function() {
 # has no mechanism we can use. Kept separate from execution so the choice is
 # testable without spawning anything.
 #
-# On macOS `caffeinate -w <pid>` releases the assertion when that pid exits, so
-# binding it to our own process makes it self-cleaning: the assertion cannot
-# outlive the session even if teardown never runs.
+# Every branch binds the helper to `pid`, which buys two things. The assertion
+# is self-cleaning -- it cannot outlive the session even if teardown never runs
+# -- and the pid in the command line makes the helper identifiable as ours, so
+# concurrent sessions on one host do not release each other's holds.
+#
+# macOS has a flag for it: `caffeinate -w <pid>` exits when that pid exits.
+# systemd-inhibit instead holds its lock for as long as the command it is given
+# keeps running, so the binding has to be the command itself. `tail --pid` is
+# the usual way to spell "block until that process exits".
 .awake_cmd <- function(os = get_os(), pid = Sys.getpid()) {
     switch(os,
         "osx" = list(
@@ -89,7 +95,7 @@ get_os <- function() {
                     "--who=Giotto",
                     "--why=long-running Giotto computation",
                     "--mode=block",
-                    "sleep", "infinity"
+                    "tail", "--pid", as.character(pid), "-f", "/dev/null"
                 )
             )
         } else {
@@ -132,8 +138,9 @@ get_os <- function() {
 #' @details
 #' Uses `caffeinate` on macOS and `systemd-inhibit` on Linux; on other platforms,
 #' or when neither is available, it reports that it cannot help and does nothing.
-#' No sleep assertion can outlive the R session: on macOS the helper is bound to
-#' this process and exits with it.
+#' No sleep assertion can outlive the R session: on both platforms the helper is
+#' bound to this process and exits with it. For the same reason, sessions running
+#' side by side on one machine hold and release independently.
 #'
 #' Idempotent — calling it repeatedly with `on = TRUE` leaves a single helper.
 #' @section Options:
