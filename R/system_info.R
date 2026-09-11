@@ -138,10 +138,12 @@ get_os <- function() {
 #' Idempotent — calling it repeatedly with `on = TRUE` leaves a single helper.
 #' @section Options:
 #' \describe{
-#'   \item{`giotto.prevent_sleep`}{when `FALSE`, `keep_awake()` and
+#'   \item{`giotto.prevent_sleep`}{when `FALSE`, `keep_awake(TRUE)` and
 #'     [gwith_awake()] become no-ops (default `TRUE`). This is a kill switch for
 #'     shared machines, cluster nodes and CI, where holding a power assertion is
-#'     unwanted; it does **not** cause anything to hold one on its own.}
+#'     unwanted; it does **not** cause anything to hold one on its own. It gates
+#'     taking an assertion only — `keep_awake(FALSE)` still releases one that is
+#'     already held, so setting the option partway through cannot strand it.}
 #' }
 #' @returns `TRUE` if an assertion is held after the call, otherwise `FALSE`,
 #' invisibly
@@ -154,7 +156,9 @@ get_os <- function() {
 #' @seealso [gwith_awake()] to scope it to a block of code
 #' @export
 keep_awake <- function(on = TRUE) {
-    if (!isTRUE(getOption("giotto.prevent_sleep", TRUE))) {
+    # the kill switch blocks taking an assertion, never releasing one: setting
+    # it after a hold is in place must not strand that hold
+    if (isTRUE(on) && !isTRUE(getOption("giotto.prevent_sleep", TRUE))) {
         vmsg(.v = NULL, "keep_awake: disabled by option `giotto.prevent_sleep`")
         return(invisible(FALSE))
     }
