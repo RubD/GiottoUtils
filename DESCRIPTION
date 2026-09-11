@@ -33,7 +33,8 @@ Imports:
     methods,
     progressr,
     R.utils,
-    stats
+    stats,
+    tools
 Suggests:
     arrow,
     BiocParallel,

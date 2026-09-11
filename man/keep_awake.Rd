@@ -37,10 +37,12 @@ Idempotent — calling it repeatedly with \code{on = TRUE} leaves a single helpe
 \section{Options}{
 
 \describe{
-\item{\code{giotto.prevent_sleep}}{when \code{FALSE}, \code{keep_awake()} and
+\item{\code{giotto.prevent_sleep}}{when \code{FALSE}, \code{keep_awake(TRUE)} and
 \code{\link[=gwith_awake]{gwith_awake()}} become no-ops (default \code{TRUE}). This is a kill switch for
 shared machines, cluster nodes and CI, where holding a power assertion is
-unwanted; it does \strong{not} cause anything to hold one on its own.}
+unwanted; it does \strong{not} cause anything to hold one on its own. It gates
+taking an assertion only — \code{keep_awake(FALSE)} still releases one that is
+already held, so setting the option partway through cannot strand it.}
 }
 }
 

@@ -23,6 +23,16 @@
 
 # keep_awake ####
 
+# Tests that hold a real assertion must never run on a machine we do not own:
+# they suppress sleep on the check host for as long as they run. `caffeinate`
+# is present on the CRAN and Bioconductor macOS builders, so availability alone
+# is not a sufficient guard.
+skip_unless_own_machine <- function() {
+    skip_on_cran()
+    skip_on_ci()
+    skip_if_not(nzchar(Sys.which("caffeinate")), "no caffeinate on this system")
+}
+
 # The command choice is pure, so it can be tested anywhere including CI.
 test_that(".awake_cmd picks the right mechanism per platform", {
     mac <- .awake_cmd("osx", pid = 4242)
@@ -50,8 +60,23 @@ test_that("keep_awake respects the giotto.prevent_sleep kill switch", {
     })
 })
 
+test_that("the kill switch gates taking a hold, not releasing one", {
+    skip_unless_own_machine()
+    on.exit(keep_awake(FALSE), add = TRUE)
+
+    expect_true(keep_awake(TRUE))
+    expect_false(is.na(.awake_pid()))
+
+    # setting the option after the fact must not strand the assertion
+    gwith_options(list(giotto.prevent_sleep = FALSE), {
+        keep_awake(FALSE)
+    })
+    Sys.sleep(0.3)
+    expect_true(is.na(.awake_pid()))
+})
+
 test_that("keep_awake holds and releases a real assertion", {
-    skip_if_not(nzchar(Sys.which("caffeinate")), "no caffeinate on this system")
+    skip_unless_own_machine()
     on.exit(keep_awake(FALSE), add = TRUE)
 
     expect_true(is.na(.awake_pid())) # clean start
@@ -70,7 +95,7 @@ test_that("keep_awake holds and releases a real assertion", {
 })
 
 test_that("gwith_awake releases afterwards but leaves a pre-existing hold", {
-    skip_if_not(nzchar(Sys.which("caffeinate")), "no caffeinate on this system")
+    skip_unless_own_machine()
 
     # nothing held before or after
     expect_true(is.na(.awake_pid()))
