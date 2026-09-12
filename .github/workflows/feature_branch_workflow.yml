@@ -37,7 +37,10 @@ jobs:
         run: |
           library(testthat)
           library(GiottoUtils)
-          test_dir("tests/testthat")
+          # test_check(), not test_dir(): test_dir() evaluates tests outside the
+          # package namespace, so every test of an internal function errors with
+          # "could not find function". Matches what tests/testthat.R does.
+          test_check("GiottoUtils")
         shell: Rscript {0}
         
   lintr:
