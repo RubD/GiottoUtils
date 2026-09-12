@@ -131,8 +131,22 @@ get_os <- function() {
     if (!length(out)) NA_integer_ else out[[1L]]
 }
 
+# A helper that has been killed can linger as a zombie: the pid stays in the
+# process table, so signal 0 still reports success, until the parent reaps it.
+# Our helpers are orphans -- the shell that started them exits immediately --
+# and container inits often do not reap, so liveness has to read the process
+# state rather than infer it from the pid existing.
 .awake_alive <- function(pid) {
-    !is.na(pid) && isTRUE(tools::pskill(pid, 0L)) # signal 0 only tests
+    if (is.na(pid)) return(FALSE)
+    state <- suppressWarnings(tryCatch(
+        system2("ps", c("-o", "state=", "-p", as.character(pid)),
+            stdout = TRUE, stderr = FALSE
+        ),
+        error = function(e) character(0)
+    ))
+    state <- trimws(state)
+    state <- state[nzchar(state)]
+    length(state) > 0L && !startsWith(state[[1L]], "Z")
 }
 
 # pid of the helper this session started and that is still running, else NA.
