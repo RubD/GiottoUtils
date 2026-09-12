@@ -34,13 +34,19 @@ jobs:
           echo "RETICULATE_PYTHON=/opt/miniconda/envs/r-reticulate/bin/python" >> $GITHUB_ENV
         shell: bash
       - name: Run tests
+        env:
+          # without this skip_on_cran() fires here too, and any test guarded by
+          # it is skipped on CI rather than only on CRAN
+          NOT_CRAN: "true"
         run: |
           library(testthat)
           library(GiottoUtils)
-          # test_check(), not test_dir(): test_dir() evaluates tests outside the
-          # package namespace, so every test of an internal function errors with
-          # "could not find function". Matches what tests/testthat.R does.
-          test_check("GiottoUtils")
+          # `package` + `load_package` are what make this run tests inside the
+          # package namespace. Without them every test of an internal function
+          # errors with "could not find function" instead of running.
+          test_dir("tests/testthat",
+              package = "GiottoUtils", load_package = "installed"
+          )
         shell: Rscript {0}
         
   lintr:
