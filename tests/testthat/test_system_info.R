@@ -58,13 +58,44 @@ test_that(".awake_cmd picks the right mechanism per platform", {
         expect_null(lin)
     }
 
-    # the pid is what makes a helper identifiable as ours, on either platform
+    # binding to a pid is what stops a lock outliving the session
     for (os in c("osx", "linux")) {
         cmd <- .awake_cmd(os, pid = 4242)
         if (!is.null(cmd)) {
             expect_true("4242" %in% cmd$args, info = os)
         }
     }
+})
+
+# Regression test for the `pgrep -f` discovery this replaced, which matched
+# something on Linux when no helper existed. Reported as a hold, that sent
+# keep_awake(TRUE) down the "already holding" branch and it never started
+# anything. Pure, so it runs on every platform -- which is the point, since the
+# false positive only ever appeared on one of them.
+test_that(".awake_pid reports nothing when this session started nothing", {
+    expect_true(is.na(.awake_pid()))
+    expect_type(.awake_pid(), "integer")
+})
+
+test_that(".awake_pid does not report a helper that has since died", {
+    skip_on_cran()
+    pid <- as.integer(system("sleep 30 </dev/null >/dev/null 2>&1 & echo $!",
+        intern = TRUE
+    ))
+    on.exit(
+        {
+            tools::pskill(pid)
+            .awake_state$pid <- NA_integer_
+        },
+        add = TRUE
+    )
+
+    .awake_state$pid <- pid
+    expect_equal(.awake_pid(), pid)
+
+    tools::pskill(pid)
+    Sys.sleep(0.3)
+    expect_true(is.na(.awake_pid())) # reaped, not reported as a live hold
 })
 
 test_that("keep_awake respects the giotto.prevent_sleep kill switch", {
