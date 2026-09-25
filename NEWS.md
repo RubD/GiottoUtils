@@ -1,4 +1,7 @@
-# GiottoUtils 0.2.7
+# GiottoUtils 0.2.7 (2026/09/25)
+
+## New
+- `keep_awake()` and `gwith_awake()` hold a system sleep assertion during long computations (`caffeinate` on macOS, `systemd-inhibit` on Linux, no-op elsewhere). A sleep part-way through a run inflates wall-clock timings while CPU and memory counters look normal
 
 ## Enhancement
 - `suite_install()` accepts `"tilework"` and `"arrow"` as modules under any ref, and adds both automatically for *GiottoDisk*
