@@ -1,3 +1,10 @@
+# GiottoUtils 0.2.7
+
+## Enhancement
+- `suite_install()` accepts `"tilework"` and `"arrow"` as modules under any ref, and adds both automatically for *GiottoDisk*
+- `install_arrow` param for `suite_install()`. *arrow* needs zstd support for 10x parquet files, and the source build from r-universe is slow, so a missing or zstd-less *arrow* errors with the install command unless `install_arrow = TRUE` (install) or `FALSE` (skip)
+
+
 # GiottoUtils 0.2.6 (2026/09/02)
 
 ## Enhancement
